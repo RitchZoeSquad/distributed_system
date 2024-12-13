@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: business_db
+      POSTGRES_USER: zoeman
+      POSTGRES_PASSWORD: TestingPurposes99!!!
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - services_network
+    restart: unless-stopped
+
+  redis:
+    image: redis:6.2
+    command: redis-server --requirepass TestingPurposes9!
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+    networks:
+      - services_network
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: zoeman
+      RABBITMQ_DEFAULT_PASS: TestingPurposes9!
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./config/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+    networks:
+      - services_network
+    restart: unless-stopped
+
+networks:
+  services_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:

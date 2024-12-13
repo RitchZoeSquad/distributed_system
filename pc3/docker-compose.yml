@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  business_worker:
+    build: .
+    container_name: pc3_business_worker
+    environment:
+      - PC_ID=PC3
+      - PC1_IP=${PC1_IP}
+      - BUSINESS_API_KEY=${BUSINESS_API_KEY}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASS=${RABBITMQ_PASS}
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+    restart: unless-stopped
+    ports:
+      - "8001:8000"  # Note: Different port from PC2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
