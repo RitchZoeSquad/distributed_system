@@ -4,24 +4,24 @@ WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY src/ /app/src/
+COPY src/ ./src/
 
-# Create logs directory
+# Create log directory
 RUN mkdir -p /app/logs
 
-# Set Python path
+# Set environment variables
 ENV PYTHONPATH=/app
 
-# Health check endpoint
-EXPOSE 8000
+# Create entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-CMD ["python", "src/main.py"]
+ENTRYPOINT ["docker-entrypoint.sh"]

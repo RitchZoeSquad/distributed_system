@@ -5,6 +5,7 @@ import random
 import time
 from config import Config
 from utils.logger import Logger
+import pika
 
 business_search_api = Blueprint('business_search_api', __name__)
 logger = Logger('business_search_api')
@@ -58,17 +59,18 @@ def get_usa_random_profile_with_businesses():
                 "longitude": city.get('longitude', 'Unknown')
             },
             "occupation": occupation.get('Occupation', 'Unknown'),
-            "timestamp": time.time()
+            "timestamp": time.time(),
+            "enable_leak_check": True  # Add flag for leak check
         }
 
-        # Publish to RabbitMQ business queue
-        channel = Config.get_rabbitmq_channel()
+        # Publish to RabbitMQ
+        channel = get_rabbitmq_channel()
         channel.basic_publish(
             exchange='',
             routing_key='business_queue',
             body=json.dumps(search_message),
             properties=pika.BasicProperties(
-                delivery_mode=2,  # make message persistent
+                delivery_mode=2,
                 content_type='application/json'
             )
         )

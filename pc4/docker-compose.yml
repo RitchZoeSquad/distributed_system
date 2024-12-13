@@ -1,15 +1,14 @@
 version: '3.8'
 
 services:
-  domain_email_phone_worker:
+  domain_email_worker:
     build: .
-    container_name: pc4_worker
+    container_name: pc4_domain_email_worker
     environment:
       - PC_ID=PC4
       - PC1_IP=${PC1_IP}
       - DOMAIN_API_KEY=${DOMAIN_API_KEY}
       - EMAIL_API_KEY=${EMAIL_API_KEY}
-      - PHONE_API_KEY=${PHONE_API_KEY}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
@@ -20,14 +19,36 @@ services:
       - ./logs:/app/logs
     restart: unless-stopped
     ports:
-      - "8002:8000"  # Different port from PC2 and PC3
+      - "8002:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+
+  leak_check_worker:
+    build: .
+    container_name: pc4_leak_check_worker
+    environment:
+      - PC_ID=PC4_LEAK
+      - PC1_IP=${PC1_IP}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASS=${RABBITMQ_PASS}
+      - DEHASHED_API_KEY=${DEHASHED_API_KEY}
+      - LEAKCHECK_API_KEY=${LEAKCHECK_API_KEY}
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+    restart: unless-stopped
+    ports:
+      - "8003:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - domain_email_worker

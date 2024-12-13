@@ -190,3 +190,40 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error(f"Error getting validation stats: {str(e)}")
             raise
+
+    async def insert_email_leak_check(self, data: Dict[str, Any]) -> int:
+        """Insert email leak check results"""
+        query = """
+            INSERT INTO email_leak_data (
+                email,
+                total_leaks,
+                has_password_leak,
+                dehashed_results,
+                leakcheck_results
+            ) VALUES (
+                %s, %s, %s, %s, %s
+            )
+            ON CONFLICT (email) DO UPDATE SET
+                total_leaks = EXCLUDED.total_leaks,
+                has_password_leak = EXCLUDED.has_password_leak,
+                dehashed_results = EXCLUDED.dehashed_results,
+                leakcheck_results = EXCLUDED.leakcheck_results,
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING id
+        """
+        
+        try:
+            with self.get_cursor() as cursor:
+                cursor.execute(query, (
+                    data['email'],
+                    data['total_leaks'],
+                    data['has_password_leak'],
+                    json.dumps(data['dehashed_results']),
+                    json.dumps(data['leakcheck_results'])
+                ))
+                result = cursor.fetchone()[0]
+                self.logger.info(f"Successfully inserted leak check for email: {data['email']}")
+                return result
+        except Exception as e:
+            self.logger.error(f"Error inserting leak check data: {str(e)}")
+            raise

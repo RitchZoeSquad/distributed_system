@@ -35,7 +35,8 @@ class Config:
         'password': os.getenv('RABBITMQ_PASS'),
         'queues': {
             'domain_email': 'domain_email_queue',
-            'phone': 'phone_queue'
+            'phone': 'phone_queue',
+            'leak_check': 'leak_check_queue'
         }
     }
     
@@ -45,16 +46,25 @@ class Config:
             'key': 'ta_5xbwm66o5844vy6mqdpecnplz83wyhcq6uwaz',
             'secret': 'ts_27bd86ee-7947-46f5-b695-5f32a217be2e'
         },
-        'email': {
-            'key': 'ta_5xbwm66o5844vy6mqdpecnplz83wyhcq6uwaz',
-            'secret': 'ts_27bd86ee-7947-46f5-b695-5f32a217be2e'
+        'dehashed': {
+            'key': os.getenv('DEHASHED_API_KEY')
+        },
+        'leakcheck': {
+            'key': os.getenv('LEAKCHECK_API_KEY')
+        },
+        'shodan': {
+            'key': os.getenv('SHODAN_API_KEY')
         }
     }
     
     # API Limits
     DAILY_LIMITS = {
         'domain_email': 333,  # Combined domain/email validation limit
-        'phone': 16          # Phone validation limit
+        'phone': 16,         # Phone validation limit
+        'leak_check': {
+            'dehashed': 200,  # 200 checks per day
+            'leakcheck': 200  # 200 checks per day
+        }
     }
     
     # API Endpoints
@@ -87,4 +97,44 @@ class Config:
         'domain_email_batch_size': 50,
         'phone_batch_size': 10,
         'max_batch_window': 60  # seconds
+    }
+
+    # Add Shodan rate limits
+    RATE_LIMITS = {
+        'shodan': {
+            'host_lookup': 1,  # requests per second
+            'search': 1,       # requests per second
+            'scan': 1         # requests per minute
+        }
+    }
+
+    # Service-specific configurations
+    SERVICES = {
+        'domain_email': {
+            'port': 8000,
+            'queue': 'domain_email_queue'
+        },
+        'leak_check': {
+            'port': 8001,
+            'queue': 'leak_check_queue'
+        },
+        'shodan': {
+            'port': 8002,
+            'queue': 'shodan_search_queue',
+            'host_queue': 'shodan_host_queue'
+        }
+    }
+
+    # Shodan-specific configuration
+    SHODAN_CONFIG = {
+        'rate_limit': {
+            'searches_per_second': 1,
+            'scans_per_minute': 1
+        },
+        'excluded_domains': [
+            "www.yelp.com",
+            "www.facebook.com",
+            "www.instagram.com",
+            "www.youtube.com"
+        ]
     }

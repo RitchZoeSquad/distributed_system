@@ -26,3 +26,14 @@ scrape_configs:
   - job_name: 'serp_worker'
     static_configs:
       - targets: ['pc5:8000']
+
+  - job_name: 'leak_check_metrics'
+    static_configs:
+      - targets: ['pc4:8000']
+    metrics_path: '/metrics'
+
+  - job_name: 'shodan_metrics'
+    static_configs:
+      - targets: ['pc4:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s

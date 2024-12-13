@@ -1,9 +1,14 @@
 import asyncio
 from workers.leak_check_worker import LeakCheckWorker
 from utils.logger import Logger
+from fastapi import FastAPI
+from api.health import router as health_router
 
-async def main():
-    logger = Logger('main')
+app = FastAPI()
+app.include_router(health_router)
+
+async def start_worker():
+    logger = Logger('main_leak_check')
     worker = LeakCheckWorker()
     
     try:
@@ -17,5 +22,10 @@ async def main():
         await worker.stop()
         raise
 
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(start_worker())
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000) 

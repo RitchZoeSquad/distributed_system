@@ -5,6 +5,9 @@ from utils.logger import Logger
 import backoff
 from typing import Dict, Any, Optional
 from datetime import datetime
+import json
+import pika
+from api.shodan_api import ShodanAPI
 
 class DomainEmailAPI:
     def __init__(self):
@@ -156,13 +159,66 @@ class DomainEmailAPI:
             
             # Process email data
             emails_info = []
+            leak_check_api = LeakCheckAPI()
+            
             if domain_data and 'data' in domain_data and 'emails' in domain_data['data']:
                 for email_entry in domain_data['data']['emails'][:5]:  # Limit to first 5 emails
                     email = email_entry.get('email')
                     if email:
+                        # Get email enrichment data
                         enriched_data = await self.enrich_email(email)
+                        
+                        # Check for email leaks
+                        leak_data = await leak_check_api.comprehensive_check(email)
+                        
                         if enriched_data:
-                            emails_info.append(self._extract_email_info(enriched_data))
+                            email_info = self._extract_email_info(enriched_data)
+                            email_info['leak_data'] = leak_data
+                            emails_info.append(email_info)
+
+            await leak_check_api.close()
+
+            # Get comprehensive Shodan data for the domain
+            shodan_api = ShodanAPI()
+            shodan_data = await shodan_api.get_domain_info(domain)
+            await shodan_api.close()
+
+            if shodan_data:
+                org_info['shodan_data'] = {
+                    'ssl_certificates': shodan_data.get('ssl_certificates', []),
+                    'open_ports': shodan_data.get('open_ports', []),
+                    'technologies': shodan_data.get('technologies', []),
+                    'cloud_assets': shodan_data.get('cloud_assets', []),
+                    'screenshots': shodan_data.get('screenshots', []),
+                    'security_issues': {
+                        'vulnerable_services': [],
+                        'exposed_ports': [],
+                        'ssl_issues': []
+                    }
+                }
+
+                # Analyze security issues
+                for port in org_info['shodan_data']['open_ports']:
+                    if port in [3389, 22, 3306, 1433]:  # Common sensitive ports
+                        org_info['shodan_data']['security_issues']['exposed_ports'].append({
+                            'port': port,
+                            'risk': 'high',
+                            'description': f'Potentially sensitive port {port} exposed'
+                        })
+
+                # Check SSL certificates
+                for cert in org_info['shodan_data']['ssl_certificates']:
+                    if cert.get('expires'):
+                        # Add SSL expiration warning if within 30 days
+                        try:
+                            expires = datetime.fromisoformat(cert['expires'].replace('Z', '+00:00'))
+                            if (expires - datetime.now(expires.tzinfo)).days < 30:
+                                org_info['shodan_data']['security_issues']['ssl_issues'].append({
+                                    'type': 'expiration',
+                                    'description': f'SSL Certificate expiring soon: {cert["expires"]}'
+                                })
+                        except Exception as e:
+                            self.logger.error(f"Error parsing SSL expiration: {str(e)}")
 
             return {
                 'business_id': business_data.get('business_id'),
@@ -181,3 +237,29 @@ class DomainEmailAPI:
         if self.session and not self.session.closed:
             await self.session.close()
             self.session = None
+
+    async def schedule_leak_check(self, email: str):
+        """Schedule an email for leak checking"""
+        try:
+            channel = await self.get_rabbitmq_channel()
+            
+            message = {
+                'email': email,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            channel.basic_publish(
+                exchange='',
+                routing_key=Config.RABBITMQ_CONFIG['queues']['leak_check'],
+                body=json.dumps(message),
+                properties=pika.BasicProperties(
+                    delivery_mode=2,  # make message persistent
+                    content_type='application/json'
+                )
+            )
+            
+            self.logger.info(f"Scheduled leak check for email: {email}")
+            
+        except Exception as e:
+            self.logger.error(f"Error scheduling leak check: {str(e)}")
+            raise
