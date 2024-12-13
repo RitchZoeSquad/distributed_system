@@ -6,6 +6,7 @@ import time
 from config import Config
 from utils.logger import Logger
 import pika
+from outscraper import ApiClient
 
 business_search_api = Blueprint('business_search_api', __name__)
 logger = Logger('business_search_api')
@@ -13,6 +14,20 @@ logger = Logger('business_search_api')
 # API Configuration
 BASE_URL = "http://35.227.114.49:8080/api/v2/tables"
 TOKEN = "-iGWInPJpwDcwvB0t3XqdGiVFsTRJmcEA3457AUD"
+
+class BusinessSearchAPI:
+    def __init__(self):
+        self.api_key = Config.API_KEYS['outscraper']['key']
+        self.client = ApiClient(api_key=self.api_key)
+        self.logger = Logger('business_search_api')
+
+    async def search_businesses(self, query: str, location: str):
+        try:
+            results = self.client.google_search(f'{query} {location}')
+            return self._format_results(results)
+        except Exception as e:
+            self.logger.error(f"Business search error: {str(e)}")
+            raise
 
 def fetch_random_us_city():
     url = f"{BASE_URL}/ms38nwz5p1q0gxz/records?where=(country_code,eq,US)&limit=1000&shuffle=1"

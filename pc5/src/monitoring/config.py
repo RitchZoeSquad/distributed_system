@@ -21,4 +21,32 @@ class MonitoringConfig:
             'description': 'Total number of Shodan API errors',
             'labels': ['error_type']
         }
+    }
+
+    API_METRICS = {
+        'shodan': {
+            'requests_total': 'Counter',
+            'errors_total': 'Counter',
+            'request_duration_seconds': 'Histogram'
+        },
+        'leakcheck': {
+            'requests_total': 'Counter',
+            'errors_total': 'Counter',
+            'request_duration_seconds': 'Histogram'
+        },
+        'dehashed': {
+            'requests_total': 'Counter',
+            'errors_total': 'Counter',
+            'request_duration_seconds': 'Histogram'
+        },
+        'serp': {
+            'requests_total': 'Counter',
+            'errors_total': 'Counter',
+            'request_duration_seconds': 'Histogram'
+        },
+        'outscraper': {
+            'requests_total': 'Counter',
+            'errors_total': 'Counter',
+            'request_duration_seconds': 'Histogram'
+        }
     } 

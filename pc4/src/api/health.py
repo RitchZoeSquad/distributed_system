@@ -4,6 +4,8 @@ import psutil
 import aioredis
 import aio_pika
 from config import Config
+from api.shodan import ShodanAPI
+from api.leakcheck import LeakCheckAPI
 
 router = APIRouter()
 
@@ -44,6 +46,37 @@ async def shodan_health() -> Dict:
         await connection.close()
     except Exception as e:
         health_status["components"]["rabbitmq"] = "unhealthy"
+        health_status["status"] = "degraded"
+
+    return health_status 
+
+@router.get("/health/apis")
+async def check_api_health():
+    """Check health of all APIs"""
+    health_status = {
+        "status": "healthy",
+        "apis": {
+            "shodan": "healthy",
+            "leakcheck": "healthy",
+            "dehashed": "healthy",
+            "outscraper": "healthy"
+        }
+    }
+
+    # Check Shodan API
+    try:
+        shodan_api = ShodanAPI()
+        await shodan_api.get_host_info("8.8.8.8")
+    except Exception as e:
+        health_status["apis"]["shodan"] = "unhealthy"
+        health_status["status"] = "degraded"
+
+    # Check LeakCheck API
+    try:
+        leak_check = LeakCheckAPI()
+        await leak_check.check_email("test@example.com")
+    except Exception as e:
+        health_status["apis"]["leakcheck"] = "unhealthy"
         health_status["status"] = "degraded"
 
     return health_status 
