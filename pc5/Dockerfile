@@ -3,25 +3,22 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Copy requirements file
 COPY requirements.txt .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY src/ /app/src/
+COPY src/ ./src/
 
-# Create logs directory
-RUN mkdir -p /app/logs
-
-# Set Python path
+# Set environment variables
 ENV PYTHONPATH=/app
 
-# Health check endpoint
-EXPOSE 8000
-
-CMD ["python", "src/main.py"]
+# Command to run the application
+CMD ["python", "-u", "src/main.py"]

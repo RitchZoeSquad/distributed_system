@@ -1,7 +1,6 @@
 import asyncio
 from message_queue.message_queue import QueueConsumer
 from utils.logger import Logger
-from utils.metrics import start_metrics_server
 
 logger = Logger('main')
 consumer = QueueConsumer()
@@ -9,8 +8,8 @@ consumer = QueueConsumer()
 async def message_handler(data):
     try:
         operation = data.get('operation')
-        if operation == 'leak_check':
-            await consumer.process_leak_check(data.get('email'))
+        if operation == 'business':
+            await consumer.process_business(data)
         else:
             logger.warning(f"Unknown operation: {operation}")
     except Exception as e:
@@ -19,10 +18,7 @@ async def message_handler(data):
 
 async def main():
     try:
-        # Start metrics server
-        start_metrics_server()
-        
-        logger.info("Starting leak check worker...")
+        logger.info("Starting business worker...")
         await consumer.start_consuming(message_handler)
     except KeyboardInterrupt:
         logger.info("Shutting down...")

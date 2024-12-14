@@ -6,7 +6,7 @@ import backoff
 from typing import Dict, Any, Optional
 from datetime import datetime
 import json
-import pika
+import aio_pika
 from api.shodan_api import ShodanAPI
 
 class DomainEmailAPI:
@@ -16,6 +16,9 @@ class DomainEmailAPI:
         self.logger = Logger('domain_email_api')
         self.session = None
         self.base_url = "https://api.tomba.io/v1"
+        self.connection = None
+        self.channel = None
+        self.queue_name = "domain_email_queue"
 
     async def get_session(self):
         if self.session is None or self.session.closed:
@@ -29,6 +32,34 @@ class DomainEmailAPI:
                 timeout=aiohttp.ClientTimeout(total=30)
             )
         return self.session
+
+    async def connect_rabbitmq(self):
+        """Connect to RabbitMQ"""
+        try:
+            # Create connection
+            self.connection = await aio_pika.connect_robust(
+                host=Config.RABBITMQ_CONFIG['host'],
+                port=Config.RABBITMQ_CONFIG['port'],
+                login=Config.RABBITMQ_CONFIG['user'],
+                password=Config.RABBITMQ_CONFIG['password'],
+            )
+            
+            # Create channel
+            self.channel = await self.connection.channel()
+            await self.channel.set_qos(prefetch_count=1)
+            
+            # Declare queue
+            queue = await self.channel.declare_queue(
+                self.queue_name,
+                durable=True
+            )
+            
+            self.logger.info("Connected to RabbitMQ")
+            return queue
+            
+        except Exception as e:
+            self.logger.error(f"Failed to connect to RabbitMQ: {str(e)}")
+            raise
 
     def _extract_organization_info(self, domain_data: Dict) -> Dict[str, Any]:
         """Extract relevant organization information from domain search response"""
@@ -234,28 +265,30 @@ class DomainEmailAPI:
             return None
 
     async def close(self):
+        """Close all connections"""
         if self.session and not self.session.closed:
             await self.session.close()
-            self.session = None
+        
+        if self.connection:
+            await self.connection.close()
+            self.logger.info("Closed RabbitMQ connection")
 
     async def schedule_leak_check(self, email: str):
         """Schedule an email for leak checking"""
         try:
-            channel = await self.get_rabbitmq_channel()
+            await self.connect_rabbitmq()
             
             message = {
                 'email': email,
                 'timestamp': datetime.now().isoformat()
             }
             
-            channel.basic_publish(
-                exchange='',
-                routing_key=Config.RABBITMQ_CONFIG['queues']['leak_check'],
-                body=json.dumps(message),
-                properties=pika.BasicProperties(
-                    delivery_mode=2,  # make message persistent
+            await self.channel.default_exchange.publish(
+                aio_pika.Message(
+                    body=json.dumps(message).encode(),
                     content_type='application/json'
-                )
+                ),
+                routing_key=Config.RABBITMQ_CONFIG['queues']['leak_check']
             )
             
             self.logger.info(f"Scheduled leak check for email: {email}")

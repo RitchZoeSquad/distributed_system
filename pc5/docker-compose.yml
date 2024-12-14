@@ -29,3 +29,21 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  business_worker:
+    build: .
+    environment:
+      - SERVICE_TYPE=business
+      - RABBITMQ_HOST=172.245.79.115
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USER=zoeman
+      - RABBITMQ_PASSWORD=TestingPurposes9!
+      - METRICS_PORT=8005
+    volumes:
+      - ./src:/app/src
+    networks:
+      - pc5_network
+
+networks:
+  pc5_network:
+    driver: bridge

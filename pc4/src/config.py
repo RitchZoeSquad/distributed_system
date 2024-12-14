@@ -1,66 +1,87 @@
 import os
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 
 class Config:
-    # PC Identification
+    # PC ID configuration
     PC_ID = os.getenv('PC_ID', 'PC4')
     
-    # Central Services (PC1) Configuration
-    PC1_IP = os.getenv('PC1_IP', 'localhost')
+    # Service configuration
+    SERVICE_TYPE = os.getenv('SERVICE_TYPE', 'leak_check')  # or 'domain_email'
     
-    # Database Configuration
-    DB_CONFIG = {
-        'host': PC1_IP,
-        'port': 5432,
-        'database': 'business_db',
-        'user': os.getenv('POSTGRES_USER'),
-        'password': os.getenv('POSTGRES_PASSWORD')
-    }
-    
-    # Redis Configuration
-    REDIS_CONFIG = {
-        'host': PC1_IP,
-        'port': 6379,
-        'password': os.getenv('REDIS_PASSWORD'),
-        'db': 0
-    }
-    
-    # RabbitMQ Configuration
+    # RabbitMQ configuration
     RABBITMQ_CONFIG = {
-        'url': f"amqp://{os.getenv('RABBITMQ_USER')}:{os.getenv('RABBITMQ_PASS')}@{PC1_IP}:5672/",
-        'exchange_name': 'business_exchange',
-        'queue_name': f"business_queue_{PC_ID}",
-        'routing_key': 'business.*'
+        'host': os.getenv('RABBITMQ_HOST', 'localhost'),
+        'port': int(os.getenv('RABBITMQ_PORT', 5672)),
+        'user': os.getenv('RABBITMQ_USER', 'guest'),
+        'password': os.getenv('RABBITMQ_PASSWORD', 'guest'),
+        'queues': {
+            'leak_check': 'leak_check_queue',
+            'domain_email': 'domain_email_queue'
+        }
     }
 
-    # API Configuration
-    API_CONFIG = {
-        'base_url': f"http://{PC1_IP}:8000/api",
-        'api_key': os.getenv('BUSINESS_API_KEY'),
-        'timeout': 30
-    }
-
-    # Outscraper Configuration
-    OUTSCRAPER_CONFIG = {
-        'api_key': os.getenv('OUTSCRAPER_API_KEY')
-    }
-
-    # Health Check Configuration
-    HEALTH_CHECK_PORT = 8000
-    
-    # Logging Configuration
+    # Logging configuration
     LOG_CONFIG = {
-        'level': 'INFO',
+        'level': logging.INFO,
         'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        'directory': 'logs'
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+                'level': logging.INFO,
+            },
+            'file': {
+                'class': 'logging.FileHandler',
+                'filename': 'logs/app.log',
+                'level': logging.INFO,
+            }
+        }
     }
 
-    # Retry Configuration
-    RETRY_CONFIG = {
-        'max_retries': 5,
-        'max_time': 30,
-        'initial_delay': 1,
-        'backoff_factor': 2
+    # API configuration
+    API_CONFIG = {
+        'leak_check': {
+            'base_url': os.getenv('LEAK_CHECK_API_URL', 'http://localhost:8000'),
+            'timeout': int(os.getenv('API_TIMEOUT', 30))
+        },
+        'domain_email': {
+            'base_url': os.getenv('DOMAIN_EMAIL_API_URL', 'http://localhost:8001'),
+            'timeout': int(os.getenv('API_TIMEOUT', 30))
+        }
     }
+
+    # Redis configuration
+    REDIS_CONFIG = {
+        'host': os.getenv('REDIS_HOST', 'localhost'),
+        'port': int(os.getenv('REDIS_PORT', 6379)),
+        'db': int(os.getenv('REDIS_DB', 0)),
+        'password': os.getenv('REDIS_PASSWORD', None)
+    }
+
+    # Metrics configuration
+    METRICS_PORT = int(os.getenv('METRICS_PORT', 8000))
+
+    # API Keys configuration
+    API_KEYS = {
+        'dehashed': {
+            'key': os.getenv('DEHASHED_API_KEY')
+        },
+        'leakcheck': {
+            'key': os.getenv('LEAKCHECK_API_KEY')
+        },
+        'shodan': {
+            'key': os.getenv('SHODAN_API_KEY')
+        },
+        'business': {
+            'key': os.getenv('BUSINESS_API_KEY')
+        },
+        'outscraper': {
+            'key': os.getenv('OUTSCRAPER_API_KEY')
+        }
+    }
+
+    @classmethod
+    def get_api_config(cls, service_type):
+        return cls.API_CONFIG.get(service_type, {})

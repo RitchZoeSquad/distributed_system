@@ -7,7 +7,7 @@ from enum import Enum
 import asyncio
 import aiohttp
 import backoff
-import redis
+from rate_limiting import RateLimiter
 from datetime import datetime
 import json
 import hashlib
@@ -56,7 +56,7 @@ class LeakCheckAPI:
         self.dehashed_key = Config.API_KEYS['dehashed']['key']
         self.leakcheck_key = Config.API_KEYS['leakcheck']['key']
         self.session = None
-        self.redis = redis.Redis(**Config.REDIS_CONFIG)
+        self.rate_limiter = RateLimiter()
 
     def _validate_query(self, query: str, search_type: SearchType) -> bool:
         """Validate query based on search type"""
@@ -111,7 +111,7 @@ class LeakCheckAPI:
 
             # Check cache
             cache_key = f"leakcheck:{search_type.value}:{query}:{limit}:{offset}"
-            cached_result = self.redis.get(cache_key)
+            cached_result = self.rate_limiter.get(cache_key)
             if cached_result:
                 return json.loads(cached_result)
 
@@ -134,7 +134,7 @@ class LeakCheckAPI:
             formatted_result = self._format_results(result)
 
             # Cache results
-            self.redis.setex(
+            self.rate_limiter.setex(
                 cache_key,
                 86400,  # 24 hours
                 json.dumps(formatted_result)
@@ -229,7 +229,7 @@ class LeakCheckAPI:
         
         for api_name in ['dehashed', 'leakcheck']:
             key = f"leak_check:{api_name}:{today}"
-            usage = int(self.redis.get(key) or 0)
+            usage = int(self.rate_limiter.get(key) or 0)
             limit = Config.DAILY_LIMITS['leak_check'][api_name]
             stats[api_name] = {
                 'usage': usage,
@@ -242,7 +242,7 @@ class LeakCheckAPI:
     async def close(self):
         if self.session and not self.session.closed:
             await self.session.close()
-        self.redis.close() 
+        self.rate_limiter.close() 
 
     async def check_dehashed(self, entry: str, search_type: DehashedSearchType = DehashedSearchType.EMAIL, page: int = 1) -> List[Dict[str, Any]]:
         """Check entry against Dehashed API with specific search type"""
