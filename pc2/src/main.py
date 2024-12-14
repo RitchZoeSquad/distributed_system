@@ -1,81 +1,69 @@
 import asyncio
 import uvicorn
 from fastapi import FastAPI
-from config import Config
 from api.business_api import BusinessAPI
-from database.db_manager import DatabaseManager
-from queue.consumer import QueueConsumer
-from redis.rate_limiter import RateLimiter
+from message_queue.message_queue import QueueConsumer
 from utils.logger import Logger
-from utils.metrics import MetricsCollector
+from typing import Dict, Any
 
-# Create FastAPI app for health checks
 app = FastAPI()
+business_api = BusinessAPI()
+consumer = QueueConsumer()
+logger = Logger("main")
 
-class BusinessWorker:
-    def __init__(self):
-        self.logger = Logger(Config.PC_ID)
-        self.db = DatabaseManager()
-        self.api = BusinessAPI()
-        self.consumer = QueueConsumer()
-        self.rate_limiter = RateLimiter()
-        self.metrics = MetricsCollector()
+async def handle_message(message: Dict[str, Any]):
+    """Handle incoming messages from RabbitMQ"""
+    try:
+        logger.info(f"Received message: {message}")
+        
+        # Handle different message types
+        message_type = message.get('type')
+        if message_type == 'search':
+            # Handle search request
+            result = await business_api.search_businesses(message.get('data', {}))
+            logger.info(f"Search result: {result}")
+        elif message_type == 'create':
+            # Handle create business request
+            result = await business_api.create_business(message.get('data', {}))
+            logger.info(f"Create result: {result}")
+        elif message_type == 'update':
+            # Handle update business request
+            business_id = message.get('business_id')
+            result = await business_api.update_business(business_id, message.get('data', {}))
+            logger.info(f"Update result: {result}")
+        elif message_type == 'delete':
+            # Handle delete business request
+            business_id = message.get('business_id')
+            result = await business_api.delete_business(business_id)
+            logger.info(f"Delete result: {result}")
+        else:
+            logger.warning(f"Unknown message type: {message_type}")
+            
+    except Exception as e:
+        logger.error(f"Error handling message: {str(e)}")
 
-    async def process_business(self, data):
-        try:
-            if await self.rate_limiter.can_make_request():
-                self.logger.info(f"Processing business: {data['business_id']}")
-                
-                # Start timing the processing
-                start_time = self.metrics.time()
-                
-                # Make API request
-                result = await self.api.search_business(data)
-                
-                # Store results
-                await self.db.insert_business(result)
-                
-                # Update metrics
-                self.metrics.increment_processed_businesses()
-                self.metrics.observe_processing_time(start_time)
-                
-                # Update rate limiter
-                await self.rate_limiter.increment_usage()
-                
-                return result
-            else:
-                self.logger.warning("Rate limit exceeded")
-                return None
-                
-        except Exception as e:
-            self.logger.error(f"Error processing business: {str(e)}")
-            self.metrics.increment_api_errors()
-            raise
+@app.on_event("startup")
+async def startup_event():
+    """Start the application and message consumer"""
+    try:
+        logger.info("Starting up the application")
+        # Start the queue consumer with message handler
+        asyncio.create_task(consumer.start(handle_message))
+        logger.info("Message consumer started")
+    except Exception as e:
+        logger.error(f"Failed to start application: {str(e)}")
+        raise
 
-    async def start(self):
-        self.logger.info(f"Starting Business Worker on {Config.PC_ID}")
-        await self.consumer.start_consuming(self.process_business)
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "pc_id": Config.PC_ID}
-
-async def start_server():
-    config = uvicorn.Config(
-        app, 
-        host="0.0.0.0", 
-        port=Config.HEALTH_CHECK_PORT,
-        log_level="info"
-    )
-    server = uvicorn.Server(config)
-    await server.serve()
-
-async def main():
-    worker = BusinessWorker()
-    await asyncio.gather(
-        worker.start(),
-        start_server()
-    )
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up resources on shutdown"""
+    try:
+        logger.info("Shutting down the application")
+        await consumer.close()
+        await business_api.close()
+        logger.info("Application shutdown complete")
+    except Exception as e:
+        logger.error(f"Error during shutdown: {str(e)}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    uvicorn.run(app, host="0.0.0.0", port=8000)

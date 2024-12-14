@@ -4,13 +4,14 @@ from config import Config
 from utils.logger import Logger
 import backoff
 from typing import Dict, Any
+import json
 
 class BusinessAPI:
     def __init__(self):
-        self.api_key = Config.BUSINESS_API_KEY
+        self.api_key = Config.API_CONFIG['api_key']
         self.logger = Logger('business_api')
         self.session = None
-        self.base_url = "https://api.business.example.com/v1"  # Replace with actual API URL
+        self.base_url = Config.API_CONFIG['base_url']
         self.retry_config = Config.RETRY_CONFIG
 
     async def get_session(self):
@@ -28,40 +29,53 @@ class BusinessAPI:
     @backoff.on_exception(
         backoff.expo,
         (aiohttp.ClientError, asyncio.TimeoutError),
-        max_tries=3
+        max_tries=5,
+        max_time=30
     )
-    async def search_business(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def make_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
+        """Make a request to the Business API with retries"""
+        session = await self.get_session()
+        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        
         try:
-            session = await self.get_session()
-            self.logger.info(f"Making API request for business: {data.get('business_id', 'unknown')}")
-            
-            async with session.post(
-                f"{self.base_url}/search",
-                json=data,
-                timeout=30
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    self.logger.info(f"Successfully retrieved data for business: {data.get('business_id', 'unknown')}")
-                    return result
-                elif response.status == 429:  # Rate limit exceeded
-                    retry_after = int(response.headers.get('Retry-After', 60))
-                    self.logger.warning(f"Rate limit exceeded, waiting {retry_after} seconds")
-                    await asyncio.sleep(retry_after)
-                    raise aiohttp.ClientError("Rate limit exceeded")
-                else:
-                    error_text = await response.text()
-                    self.logger.error(f"API Error: {response.status} - {error_text}")
-                    raise aiohttp.ClientError(f"API Error: {response.status}")
-
-        except asyncio.TimeoutError:
-            self.logger.error(f"API request timed out for business: {data.get('business_id', 'unknown')}")
+            self.logger.info(f"Making {method} request to {url}")
+            async with session.request(method, url, **kwargs) as response:
+                response.raise_for_status()
+                return await response.json()
+                
+        except aiohttp.ClientError as e:
+            self.logger.error(f"Request failed: {str(e)}")
             raise
+            
         except Exception as e:
-            self.logger.error(f"API request failed for business {data.get('business_id', 'unknown')}: {str(e)}")
+            self.logger.error(f"Unexpected error: {str(e)}")
             raise
 
     async def close(self):
+        """Close the aiohttp session"""
         if self.session and not self.session.closed:
             await self.session.close()
-            self.session = None
+
+    async def get_business(self, business_id: str) -> Dict[str, Any]:
+        """Get business details by ID"""
+        return await self.make_request('GET', f'/business/{business_id}')
+
+    async def create_business(self, business_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new business"""
+        return await self.make_request('POST', '/business', json=business_data)
+
+    async def update_business(self, business_id: str, business_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing business"""
+        return await self.make_request('PUT', f'/business/{business_id}', json=business_data)
+
+    async def delete_business(self, business_id: str) -> Dict[str, Any]:
+        """Delete a business"""
+        return await self.make_request('DELETE', f'/business/{business_id}')
+
+    async def search_businesses(self, query: Dict[str, Any]) -> Dict[str, Any]:
+        """Search for businesses"""
+        return await self.make_request('POST', '/business/search', json=query)
+
+    async def get_business_stats(self) -> Dict[str, Any]:
+        """Get business statistics"""
+        return await self.make_request('GET', '/business/stats')

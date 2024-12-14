@@ -43,6 +43,16 @@ services:
       - services_network
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - services_network
+    restart: unless-stopped
+
 networks:
   services_network:
     driver: bridge

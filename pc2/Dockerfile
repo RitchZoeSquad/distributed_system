@@ -12,8 +12,15 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
-COPY src/ /app/src/
+# Copy source code (excluding old queue directory)
+COPY src/api /app/src/api/
+COPY src/database /app/src/database/
+COPY src/message_queue /app/src/message_queue/
+COPY src/redis /app/src/redis/
+COPY src/utils /app/src/utils/
+COPY src/__init__.py /app/src/
+COPY src/config.py /app/src/
+COPY src/main.py /app/src/
 
 # Create logs directory
 RUN mkdir -p /app/logs

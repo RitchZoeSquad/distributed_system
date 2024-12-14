@@ -33,12 +33,20 @@ class Config:
         'port': 5672,
         'user': os.getenv('RABBITMQ_USER'),
         'password': os.getenv('RABBITMQ_PASS'),
-        'queue': 'business_queue'
+        'exchange_name': 'business_events',
+        'queue_name': 'business_queue'
     }
     
     # API Configuration
-    BUSINESS_API_KEY = os.getenv('BUSINESS_API_KEY')
-    DAILY_LIMIT = 83  # Half of 166 (shared with PC3)
+    API_CONFIG = {
+        'base_url': f'http://{PC1_IP}:8000',
+        'api_key': os.getenv('BUSINESS_API_KEY')
+    }
+    
+    # Outscraper Configuration
+    OUTSCRAPER_CONFIG = {
+        'api_key': os.getenv('OUTSCRAPER_API_KEY')
+    }
     
     # Health Check Configuration
     HEALTH_CHECK_PORT = 8000

@@ -1,88 +1,40 @@
 import asyncio
-import uvicorn
-from fastapi import FastAPI
-from config import Config
-from api.business_api import BusinessAPI
-from database.db_manager import DatabaseManager
-from queue.consumer import QueueConsumer
-from redis.rate_limiter import RateLimiter
+from message_queue.message_queue import QueueConsumer
 from utils.logger import Logger
-from utils.metrics import MetricsCollector
+from api.business_api import BusinessAPI
 
-# Create FastAPI app for health checks
-app = FastAPI()
+logger = Logger('main')
+consumer = QueueConsumer()
+business_api = BusinessAPI()
 
-class BusinessWorker:
-    def __init__(self):
-        self.logger = Logger(Config.PC_ID)
-        self.db = DatabaseManager()
-        self.api = BusinessAPI()
-        self.consumer = QueueConsumer()
-        self.rate_limiter = RateLimiter()
-        self.metrics = MetricsCollector()
-
-    async def process_business(self, data):
-        try:
-            if await self.rate_limiter.can_make_request():
-                self.logger.info(f"Processing business: {data['business_id']}")
-                
-                # Start timing the processing
-                start_time = self.metrics.time()
-                
-                # Make API request
-                result = await self.api.search_business(data)
-                
-                # Store results
-                await self.db.insert_business(result)
-                
-                # Update metrics
-                self.metrics.increment_processed_businesses()
-                self.metrics.observe_processing_time(start_time)
-                
-                # Update rate limiter
-                await self.rate_limiter.increment_usage()
-                
-                return result
-            else:
-                self.logger.warning("Rate limit exceeded")
-                return None
-                
-        except Exception as e:
-            self.logger.error(f"Error processing business: {str(e)}")
-            self.metrics.increment_api_errors()
-            raise
-
-    async def start(self):
-        self.logger.info(f"Starting Business Worker on {Config.PC_ID}")
-        try:
-            await asyncio.gather(
-                self.consumer.start_consuming(self.process_business),
-                self.metrics.collect_metrics()
-            )
-        except Exception as e:
-            self.logger.error(f"Critical error in worker: {str(e)}")
-            raise
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "pc_id": Config.PC_ID}
-
-async def start_server():
-    config = uvicorn.Config(
-        app, 
-        host="0.0.0.0", 
-        port=Config.HEALTH_CHECK_PORT,
-        log_level="info"
-    )
-    server = uvicorn.Server(config)
-    await server.serve()
+async def message_handler(data):
+    try:
+        operation = data.get('operation')
+        if operation == 'search':
+            await business_api.search_businesses(data.get('query', {}))
+        elif operation == 'create':
+            await business_api.create_business(data.get('business_data', {}))
+        elif operation == 'update':
+            await business_api.update_business(data.get('business_id'), data.get('business_data', {}))
+        elif operation == 'delete':
+            await business_api.delete_business(data.get('business_id'))
+        else:
+            logger.warning(f"Unknown operation: {operation}")
+    except Exception as e:
+        logger.error(f"Error handling message: {str(e)}")
+        raise
 
 async def main():
-    worker = BusinessWorker()
-    await asyncio.gather(
-        worker.start(),
-        start_server()
-    )
+    try:
+        logger.info("Starting business worker...")
+        await consumer.start_consuming(message_handler)
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+        await consumer.close()
+        await business_api.close()
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     asyncio.run(main())
