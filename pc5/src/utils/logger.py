@@ -1,26 +1,37 @@
 import logging
 import os
-import sys
+from datetime import datetime
+from config import Config
 
 class Logger:
     def __init__(self, name: str):
-        # Create a logger with the given name
         self.logger = logging.getLogger(name)
         
-        # Only set level and handlers if they haven't been set
         if not self.logger.handlers:
-            self.logger.setLevel(logging.INFO)
+            self.logger.setLevel(Config.LOG_CONFIG['level'])
+            
+            # Create logs directory if it doesn't exist
+            log_dir = Config.LOG_CONFIG.get('directory', 'logs')
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            
+            # Create file handler
+            log_file = os.path.join(log_dir, f"{Config.PC_ID}_{name}.log")
+            fh = logging.FileHandler(log_file)
+            fh.setLevel(Config.LOG_CONFIG['level'])
+            
+            # Create console handler
+            ch = logging.StreamHandler()
+            ch.setLevel(Config.LOG_CONFIG['level'])
             
             # Create formatter
-            formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - [%(levelname)s] - %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
-            )
+            formatter = logging.Formatter(Config.LOG_CONFIG['format'])
+            fh.setFormatter(formatter)
+            ch.setFormatter(formatter)
             
-            # Console handler
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(formatter)
-            self.logger.addHandler(console_handler)
+            # Add handlers to logger
+            self.logger.addHandler(fh)
+            self.logger.addHandler(ch)
 
     def info(self, message: str):
         self.logger.info(message)
